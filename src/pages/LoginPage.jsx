@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useFlights } from '../context/FlightContext';
 import { Plane, Mail, Lock, LogIn, UserPlus, AlertCircle } from 'lucide-react';
 import Loader from '../components/Loader';
 
@@ -40,8 +41,6 @@ const LoginPage = () => {
 
                 if (result.requiresEmailConfirmation) {
                     setError('Registration successful! Please check your email and click the confirmation link before signing in.');
-                    // Show success message but don't navigate
-                    // User needs to confirm email first
                 } else {
                     navigate('/');
                 }
@@ -75,10 +74,21 @@ const LoginPage = () => {
             <div className="login-card">
                 <div className="login-header">
                     <div className="logo-container">
-                        <Plane size={40} className="logo-icon" />
-                        <div className="logo-text-col">
-                            <span className="logo-text">AREYS</span>
-                            <div className="brand-tagline">Travel Agency</div>
+                        <img
+                            src="/logo_landscape.png"
+                            alt="AREYS"
+                            className="logo-img-landscape"
+                            onError={(e) => {
+                                e.target.style.display = 'none';
+                                e.target.nextSibling.style.display = 'flex';
+                            }}
+                        />
+                        <div className="logo-icon-fallback" style={{ display: 'none', alignItems: 'center', gap: '1rem' }}>
+                            <Plane size={40} className="logo-icon" />
+                            <div className="logo-text-col">
+                                <span className="logo-text">AREYS</span>
+                                <div className="brand-tagline">System Management</div>
+                            </div>
                         </div>
                     </div>
                     <h1>{isLogin ? 'Welcome Back' : 'Create Account'}</h1>
@@ -109,7 +119,7 @@ const LoginPage = () => {
                     </div>
 
                     <div className="form-group">
-                        <label><Lock size={14} /> Password</label>
+                        <label><Lock size={14} /> Abdisamed</label>
                         <input
                             type="password"
                             value={password}
@@ -117,6 +127,17 @@ const LoginPage = () => {
                             placeholder="••••••••"
                             required
                         />
+                        {isLogin && (
+                            <div className="forgot-password-link">
+                                <button
+                                    type="button"
+                                    className="link-btn"
+                                    onClick={() => navigate('/forgot-password')}
+                                >
+                                    Forgot Password?
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     {!isLogin && (

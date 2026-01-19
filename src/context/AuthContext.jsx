@@ -9,6 +9,7 @@ export const AuthProvider = ({ children }) => {
     const [currentUser, setCurrentUser] = useState(null);
     const [userRole, setUserRole] = useState(null);
     const [userActive, setUserActive] = useState(null);
+    const [currentUserAgency, setCurrentUserAgency] = useState(null);
     const [loading, setLoading] = useState(true);
 
     // Login with email/password
@@ -42,10 +43,12 @@ export const AuthProvider = ({ children }) => {
                     if (roleData.active === false) {
                         setUserActive(false);
                         setUserRole(roleData.role);
+                        setCurrentUserAgency(roleData.agency_name);
                         return { user: data.user };
                     }
                     setUserRole(roleData.role);
                     setUserActive(true);
+                    setCurrentUserAgency(roleData.agency_name);
                 } else if (!roleError && !roleData) {
                     // No role found, create one (default to admin)
                     const { error: insertError } = await supabase
@@ -124,7 +127,7 @@ export const AuthProvider = ({ children }) => {
     // Create a new user (admin creating staff)
     // Note: For production, consider using a server-side function with service role key
     // This client-side approach uses signUp which may require email confirmation
-    const createNewUser = async (email, password, role, name) => {
+    const createNewUser = async (email, password, role, name, agencyName) => {
         try {
             // Sign up the new user
             const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
@@ -149,7 +152,8 @@ export const AuthProvider = ({ children }) => {
                     name: name,
                     role: role,
                     active: true,
-                    created_by: currentUser.id
+                    created_by: currentUser.id,
+                    agency_name: agencyName
                 });
 
             if (roleError) {
@@ -220,9 +224,11 @@ export const AuthProvider = ({ children }) => {
                             console.warn('AuthContext: User is deactivated, showing blocked screen');
                             setUserActive(false);
                             setUserRole(roleData.role);
+                            setCurrentUserAgency(roleData.agency_name);
                         } else {
                             setUserRole(roleData?.role || 'Admin');
                             setUserActive(true);
+                            setCurrentUserAgency(roleData?.agency_name || null);
                             console.log('AuthContext: Session ready with role:', roleData?.role || 'Admin');
                         }
                     }
@@ -250,6 +256,32 @@ export const AuthProvider = ({ children }) => {
         } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (!isMounted) return;
             console.log(`AuthContext: Auth event [${event}]`);
+
+            // Check for session expiration (12h max or 2h inactivity)
+            if (session) {
+                const now = Date.now();
+                const lastActive = parseInt(localStorage.getItem('last_active') || now.toString());
+                const sessionStarted = parseInt(localStorage.getItem('session_started') || now.toString());
+
+                const INACTIVITY_LIMIT = 2 * 60 * 60 * 1000; // 2 hours
+                const MAX_SESSION = 12 * 60 * 60 * 1000; // 12 hours
+
+                if (now - lastActive > INACTIVITY_LIMIT || now - sessionStarted > MAX_SESSION) {
+                    console.log('AuthContext: Session expired');
+                    localStorage.removeItem('last_active');
+                    localStorage.removeItem('session_started');
+                    logout();
+                    return;
+                }
+
+                localStorage.setItem('last_active', now.toString());
+                if (event === 'SIGNED_IN' || !localStorage.getItem('session_started')) {
+                    localStorage.setItem('session_started', now.toString());
+                }
+            } else {
+                localStorage.removeItem('last_active');
+                localStorage.removeItem('session_started');
+            }
 
             // If it's an initial session or sign in, run the full init
             if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
@@ -279,6 +311,7 @@ export const AuthProvider = ({ children }) => {
         currentUser,
         userRole,
         userActive,
+        currentUserAgency,
         login,
         register,
         logout,

@@ -10,13 +10,25 @@ import {
     LogOut,
     PlaneTakeoff,
     X,
-    Activity
+    Activity,
+    UserCircle,
+    User,
+    Building,
+    Lock,
+    ChevronUp
 } from 'lucide-react';
+import NameChangeModal from '../profile/NameChangeModal';
+import PasswordChangeModal from '../profile/PasswordChangeModal';
+import AgencyInfoModal from '../profile/AgencyInfoModal';
 
 const Sidebar = ({ isOpen, onClose }) => {
     const { currentUser, logout, userRole } = useAuth();
-    const { hasPermission } = useFlights();
+    const { hasPermission, agencyName, agencyTagline } = useFlights();
     const navigate = useNavigate();
+    const [isNameModalOpen, setIsNameModalOpen] = React.useState(false);
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = React.useState(false);
+    const [isAgencyModalOpen, setIsAgencyModalOpen] = React.useState(false);
+    const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
 
     const handleLogout = async () => {
         try {
@@ -46,8 +58,8 @@ const Sidebar = ({ isOpen, onClose }) => {
                 <div className="logo-container">
                     <PlaneTakeoff size={32} className="logo-icon" />
                     <div className="logo-text-col">
-                        <span className="logo-text">AREYS</span>
-                        <div className="brand-tagline">Travel Agency</div>
+                        <span className="logo-text">{agencyName}</span>
+                        <div className="brand-tagline">{agencyTagline}</div>
                     </div>
                 </div>
                 <button className="sidebar-close-mobile" onClick={onClose}>
@@ -81,17 +93,42 @@ const Sidebar = ({ isOpen, onClose }) => {
             </nav>
 
             <div className="sidebar-footer">
-                <div className="user-profile">
+                <div
+                    className={`user-profile ${isUserMenuOpen ? 'active' : ''}`}
+                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                >
                     <div className="user-avatar">{getInitials()}</div>
                     <div className="user-info">
-                        <span className="user-name">{currentUser?.email?.split('@')[0] || 'User'}</span>
+                        <span className="user-name">{currentUser?.user_metadata?.name || currentUser?.email?.split('@')[0] || 'User'}</span>
                         <span className="user-role">{userRole || 'Agent'}</span>
                     </div>
+                    <ChevronUp size={14} className={`menu-arrow ${isUserMenuOpen ? 'rotated' : ''}`} />
+
+                    {isUserMenuOpen && (
+                        <div className="user-context-menu" onClick={e => e.stopPropagation()}>
+                            <button onClick={() => { setIsNameModalOpen(true); setIsUserMenuOpen(false); }}>
+                                <User size={14} /> Edit Name
+                            </button>
+                            <button onClick={() => { setIsPasswordModalOpen(true); setIsUserMenuOpen(false); }}>
+                                <Lock size={14} /> Change Password
+                            </button>
+                            {userRole === 'Admin' && (
+                                <button onClick={() => { setIsAgencyModalOpen(true); setIsUserMenuOpen(false); }}>
+                                    <Building size={14} /> Edit Agency Info
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
+
                 <button className="btn-logout" title="Logout" onClick={handleLogout}>
                     <LogOut size={20} />
                 </button>
             </div>
+
+            <NameChangeModal isOpen={isNameModalOpen} onClose={() => setIsNameModalOpen(false)} />
+            <PasswordChangeModal isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} />
+            <AgencyInfoModal isOpen={isAgencyModalOpen} onClose={() => setIsAgencyModalOpen(false)} />
         </aside>
     );
 };

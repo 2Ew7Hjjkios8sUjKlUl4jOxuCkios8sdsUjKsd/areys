@@ -64,8 +64,9 @@ export const generateTickets = async (passengers, templateUrl = "/template.docx"
                 const salutation = isChild ? 'CH' : (p.gender === 'F' ? 'MRS' : 'MR');
                 const formattedName = `${salutation} ${(p.name || "").toUpperCase()}`;
 
-                const baseRate = isChild ? 90 : 130;
-                const infantTotal = infants.length * 20;
+                const baseRate = isChild ? (p.childPrice || p.child_price || 90) : (p.adultPrice || p.adult_price || 130);
+                const infantRate = p.infantPrice || p.infant_price || 20;
+                const infantTotal = infants.length * infantRate;
                 const totalBasePrice = baseRate + infantTotal;
 
                 return {
@@ -82,7 +83,7 @@ export const generateTickets = async (passengers, templateUrl = "/template.docx"
                     FlightNumber: flightInfo.flightNumber || p.flightNumber || "",
                     airline: flightInfo.airline || p.airline,
                     route: flightInfo.route || p.route || "",
-                    agency: p.agency || "Us",
+                    agency: p.agency || "-",
                     dateofissue: formatDateToDMY(p.date_of_issue || p.dateOfIssue || ""),
                 };
             })

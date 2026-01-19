@@ -40,6 +40,10 @@ export const generateManifest = async (passengers, templateUrl, flightInfo = {})
                 const isChild = p.type === 'Child';
                 const salutation = isChild ? 'CH' : (p.gender === 'F' ? 'MRS' : 'MR');
 
+                const infantTotal = (p.infants?.length || 0) * (p.infantPrice || p.infant_price || 0);
+                const basePriceCost = (p.type === 'Child' ? (p.childPrice || p.child_price || 0) : (p.adultPrice || p.adult_price || 0));
+                const realPrice = basePriceCost + infantTotal;
+
                 return {
                     _index: index + 1,
                     name: `${salutation} ${(p.name || "").toUpperCase()}`,
@@ -47,7 +51,11 @@ export const generateManifest = async (passengers, templateUrl, flightInfo = {})
                     phoneNumber: p.phoneNumber || "-",
                     infants: (p.infants || []).map(i => `IFNT ${i.toUpperCase()}`).join("\n"),
                     place: flightInfo.route || p.route || "CDD-MUQ",
-                    agency: p.agency || "Us"
+                    agency: p.agency || "-",
+                    price: realPrice > 0 ? `$${realPrice}` : "-",
+                    Tax: p.tax ? `$${p.tax}` : "-",
+                    Surcharge: p.surcharge ? `$${p.surcharge}` : "-",
+                    TotalPrice: p.total_price || p.totalPrice ? `$${p.total_price || p.totalPrice}` : "-"
                 };
             })
         };

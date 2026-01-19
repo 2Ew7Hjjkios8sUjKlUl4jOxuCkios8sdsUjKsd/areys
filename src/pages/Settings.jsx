@@ -40,7 +40,8 @@ const Settings = () => {
         email: '',
         password: '',
         confirmPassword: '',
-        role: 'Staff'
+        role: 'Staff',
+        agencyName: ''
     });
     const [userFormError, setUserFormError] = useState('');
 
@@ -50,7 +51,8 @@ const Settings = () => {
             email: '',
             password: '',
             confirmPassword: '',
-            role: 'Staff'
+            role: 'Staff',
+            agencyName: ''
         });
         setUserFormError('');
         setShowUserModal(true);
@@ -80,10 +82,10 @@ const Settings = () => {
         setIsCreatingUser(true);
 
         try {
-            await createNewUser(userForm.email, userForm.password, userForm.role, userForm.name);
+            await createNewUser(userForm.email, userForm.password, userForm.role, userForm.name, userForm.agencyName);
             await refreshData();
             setShowUserModal(false);
-            setUserForm({ name: '', email: '', password: '', confirmPassword: '', role: 'Staff' });
+            setUserForm({ name: '', email: '', password: '', confirmPassword: '', role: 'Staff', agencyName: '' });
         } catch (error) {
             const errorMessage = error.message || error.error_description || '';
             if (errorMessage.includes('already registered') || errorMessage.includes('already exists') || errorMessage.includes('already been registered')) {
@@ -461,7 +463,8 @@ const Settings = () => {
                                                         <h4>{user.name}</h4>
                                                         <div className="text-xs text-muted flex gap-3 items-center">
                                                             <span className="flex items-center gap-1"><Shield size={10} /> {user.role}</span>
-                                                            <span className="flex items-center gap-1"><User size={10} /> {user.username}</span>
+                                                            {user.agencyName && <span className="flex items-center gap-1"><Building size={10} /> {user.agencyName}</span>}
+                                                            <span className="flex items-center gap-1"><User size={10} /> {user.username || user.email?.split('@')[0]}</span>
                                                         </div>
                                                     </div>
                                                     <div className="airline-actions flex items-center gap-2">
@@ -879,6 +882,18 @@ const Settings = () => {
                                             placeholder="Repeat password"
                                             autoComplete="new-password"
                                         />
+                                    </div>
+                                    <div className="form-group">
+                                        <label><Building size={14} /> Agency (Optional)</label>
+                                        <select
+                                            value={userForm.agencyName}
+                                            onChange={(e) => setUserForm({ ...userForm, agencyName: e.target.value })}
+                                        >
+                                            <option value="">No Specific Agency</option>
+                                            {agencies.map(agency => (
+                                                <option key={agency.id} value={agency.name}>{agency.name}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div className="form-group">
                                         <label><Shield size={14} /> Role</label>

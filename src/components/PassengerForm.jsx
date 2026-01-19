@@ -14,9 +14,11 @@ import {
 } from 'lucide-react';
 
 import { useFlights } from '../context/FlightContext';
+import { useAuth } from '../context/AuthContext';
 
 const PassengerForm = ({ onAdd, onAddAndNew, initialData, onCancel, airlineConfig, currentFlight }) => {
-    const { agencies, prices } = useFlights();
+    const { agencies, prices, agencyName: systemAgencyName } = useFlights();
+    const { currentUserAgency } = useAuth();
     const [passenger, setPassenger] = useState({
         type: 'Adult',
         gender: 'M',
@@ -27,10 +29,12 @@ const PassengerForm = ({ onAdd, onAddAndNew, initialData, onCancel, airlineConfi
         date: currentFlight?.date || new Date().toISOString().split('T')[0],
         bookingReference: airlineConfig?.defaultBookingReference || 'AIEW07',
         flightNumber: currentFlight?.flightNumber || 'FLY24ADDB1',
-        tax: prices.tax,
-        surcharge: prices.surcharge,
-        totalPrice: prices.adult + prices.tax + prices.surcharge,
-        agency: 'Us',
+        basePrice: (airlineConfig?.adultPrice ?? prices.adult),
+        infantPrice: (airlineConfig?.infantPrice ?? prices.infant),
+        tax: airlineConfig?.tax ?? prices.tax,
+        surcharge: airlineConfig?.surcharge ?? prices.surcharge,
+        totalPrice: (airlineConfig?.adultPrice ?? prices.adult) + (airlineConfig?.tax ?? prices.tax) + (airlineConfig?.surcharge ?? prices.surcharge),
+        agency: currentUserAgency || systemAgencyName || 'Us',
         dateOfIssue: new Date().toISOString().split('T')[0],
     });
 
@@ -75,17 +79,46 @@ const PassengerForm = ({ onAdd, onAddAndNew, initialData, onCancel, airlineConfi
             date: currentFlight?.date || new Date().toISOString().split('T')[0],
             bookingReference: airlineConfig?.defaultBookingReference || 'AIEW07',
             flightNumber: currentFlight?.flightNumber || 'FLY24ADDB1',
-            tax: prices.tax,
-            surcharge: prices.surcharge,
-            totalPrice: prices.adult + prices.tax + prices.surcharge,
-            agency: 'Us',
+            basePrice: (airlineConfig?.adultPrice ?? prices.adult),
+            infantPrice: (airlineConfig?.infantPrice ?? prices.infant),
+            tax: airlineConfig?.tax ?? prices.tax,
+            surcharge: airlineConfig?.surcharge ?? prices.surcharge,
+            totalPrice: (airlineConfig?.adultPrice ?? prices.adult) + (airlineConfig?.tax ?? prices.tax) + (airlineConfig?.surcharge ?? prices.surcharge),
+            agency: currentUserAgency || systemAgencyName || 'Us',
             dateOfIssue: new Date().toISOString().split('T')[0],
         });
     };
 
+    // 3. Automate Pricing based on Airline
+    useEffect(() => {
+        if (!initialData && airlineConfig) {
+            const tax = airlineConfig.tax ?? prices.tax;
+            const surcharge = airlineConfig.surcharge ?? prices.surcharge;
+            setPassenger(prev => {
+                const adultPrice = airlineConfig.adultPrice ?? prices.adult;
+                const childPrice = airlineConfig.childPrice ?? prices.child;
+                const base = prev.type === 'Child' ? childPrice : adultPrice;
+                const infantRate = airlineConfig.infantPrice ?? prices.infant;
+                const infantTotal = prev.infants.length * infantRate;
+
+                return {
+                    ...prev,
+                    basePrice: base,
+                    infantPrice: infantRate,
+                    tax,
+                    surcharge,
+                    totalPrice: base + Number(tax || 0) + Number(surcharge || 0) + infantTotal
+                };
+            });
+        }
+    }, [airlineConfig, initialData]);
+
     const calculateTotal = (type, tax, surcharge, infantCount) => {
-        const base = type === 'Child' ? prices.child : prices.adult;
-        return base + Number(tax || 0) + Number(surcharge || 0) + (infantCount * prices.infant);
+        const adultPrice = airlineConfig?.adultPrice ?? prices.adult;
+        const childPrice = airlineConfig?.childPrice ?? prices.child;
+        const base = type === 'Child' ? childPrice : adultPrice;
+        const infantRate = airlineConfig?.infantPrice ?? prices.infant;
+        return base + Number(tax || 0) + Number(surcharge || 0) + (infantCount * infantRate);
     };
 
     const handleChange = (e) => {

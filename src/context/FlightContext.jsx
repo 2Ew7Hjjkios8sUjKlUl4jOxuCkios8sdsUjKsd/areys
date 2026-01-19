@@ -21,6 +21,8 @@ export const FlightProvider = ({ children }) => {
     const [users, setUsers] = useState([]);
     const [roleDefinitions, setRoleDefinitions] = useState([]);
     const [targetUserId, setTargetUserId] = useState(null);
+    const [agencyName, setAgencyName] = useState('AREYS');
+    const [agencyTagline, setAgencyTagline] = useState('Travel Agency');
     const [loading, setLoading] = useState(true);
 
     // Store channel subscriptions for cleanup
@@ -180,6 +182,9 @@ export const FlightProvider = ({ children }) => {
             }
 
             // 4. Settings
+            if (settingsRes.error) {
+                console.error('FlightContext: Error loading settings:', settingsRes.error);
+            }
             if (!settingsRes.error && settingsRes.data) {
                 const d = settingsRes.data;
                 setPrices({
@@ -191,6 +196,8 @@ export const FlightProvider = ({ children }) => {
                     updatedAt: d.updated_at,
                     updatedBy: d.updated_by
                 });
+                if (d.agency_name) setAgencyName(d.agency_name);
+                if (d.agency_tagline) setAgencyTagline(d.agency_tagline);
             }
 
             // 5. Managed Users & Roles
@@ -201,14 +208,15 @@ export const FlightProvider = ({ children }) => {
                     name: u.name,
                     email: u.email,
                     role: u.role,
-                    active: u.active
+                    active: u.active,
+                    agencyName: u.agency_name
                 })));
             }
 
             // 6. Resolve names for everyone in the account (Admin + Staff)
             const { data: allAccountRoles } = await supabase
                 .from('user_roles')
-                .select('user_id, name, email')
+                .select('user_id, name, email, agency_name')
                 .or(`user_id.eq.${targetUserId},created_by.eq.${targetUserId}`);
 
             if (allAccountRoles) {
@@ -221,10 +229,12 @@ export const FlightProvider = ({ children }) => {
                                 id: au.user_id,
                                 name: au.name || au.email?.split('@')[0] || 'Unknown',
                                 email: au.email,
+                                agencyName: au.agency_name,
                                 isAccountUser: true
                             });
-                        } else if (!existing.name && au.name) {
-                            existing.name = au.name;
+                        } else {
+                            if (!existing.name && au.name) existing.name = au.name;
+                            if (!existing.agencyName && au.agency_name) existing.agencyName = au.agency_name;
                         }
                     });
                     return merged;
@@ -366,16 +376,18 @@ export const FlightProvider = ({ children }) => {
             const before = {
                 airline: flight.airline,
                 date: flight.date,
-                route: flight.route
+                route: flight.route,
+                flightNumber: flight.flightNumber || flight.flight_number
             };
             const after = {
                 airline: data.airline,
                 date: data.date,
-                route: data.route
+                route: data.route,
+                flightNumber: data.flight_number
             };
 
             await logActivity('UPDATE', 'FLIGHT', id,
-                `Updated flight ${data.flight_number} details`,
+                `Updated flight ${data.airline} - ${data.date} details`,
                 { before, after }
             );
 
@@ -499,8 +511,10 @@ export const FlightProvider = ({ children }) => {
                     agency: passenger.agency,
                     flight_number: passenger.flightNumber,
                     booking_reference: passenger.bookingReference,
+                    ticket_price: passenger.ticketPrice || passenger.basePrice || 0,
                     tax: passenger.tax,
                     surcharge: passenger.surcharge,
+                    total_price: passenger.totalPrice,
                     date_of_issue: passenger.dateOfIssue,
                     updated_by: currentUser.id
                 })
@@ -524,7 +538,13 @@ export const FlightProvider = ({ children }) => {
                     if (f.uuid === flight.uuid || f.id === flightId) {
                         return {
                             ...f,
-                            passengers: f.passengers.map(p => p.id === data.id ? { ...data, infants: passenger.infants } : p)
+                            passengers: f.passengers.map(p => p.id === data.id ? {
+                                ...data,
+                                phoneNumber: data.phone_number,
+                                flightNumber: data.flight_number,
+                                bookingReference: data.booking_reference,
+                                infants: passenger.infants
+                            } : p)
                         };
                     }
                     return f;
@@ -538,7 +558,10 @@ export const FlightProvider = ({ children }) => {
                         agency: existingPassenger.agency,
                         phone: existingPassenger.phone_number,
                         infants: (existingPassenger.infants || []).join(', '),
-                        price: (parseFloat(existingPassenger.ticketPrice || 0) + parseFloat(existingPassenger.tax || 0)).toString()
+                        price: (parseFloat(existingPassenger.ticketPrice || 0) + parseFloat(existingPassenger.tax || 0)).toString(),
+                        bookingRef: existingPassenger.booking_reference,
+                        flightNo: existingPassenger.flight_number,
+                        dateOfIssue: existingPassenger.date_of_issue
                     };
                     const after = {
                         name: data.name,
@@ -546,11 +569,14 @@ export const FlightProvider = ({ children }) => {
                         agency: data.agency,
                         phone: data.phone_number,
                         infants: (passenger.infants || []).join(', '),
-                        price: (parseFloat(data.ticket_price || 0) + parseFloat(data.tax || 0)).toString()
+                        price: (parseFloat(data.ticket_price || 0) + parseFloat(data.tax || 0)).toString(),
+                        bookingRef: data.booking_reference,
+                        flightNo: data.flight_number,
+                        dateOfIssue: data.date_of_issue
                     };
 
                     await logActivity('UPDATE', 'PASSENGER', data.id,
-                        `Updated passenger ${data.name}`,
+                        `Updated passenger ${data.name} on ${flight.airline} - ${flight.date}`,
                         { before, after }
                     );
                 }
@@ -569,8 +595,10 @@ export const FlightProvider = ({ children }) => {
                 agency: passenger.agency,
                 flight_number: passenger.flightNumber,
                 booking_reference: passenger.bookingReference,
+                ticket_price: passenger.ticketPrice || passenger.basePrice || 0,
                 tax: passenger.tax,
                 surcharge: passenger.surcharge,
+                total_price: passenger.totalPrice,
                 date_of_issue: passenger.dateOfIssue || new Date().toISOString().split('T')[0],
                 created_by: currentUser.id
             };
@@ -596,7 +624,13 @@ export const FlightProvider = ({ children }) => {
                     if (f.uuid === flight.uuid || f.id === flightId) {
                         return {
                             ...f,
-                            passengers: [...(f.passengers || []), { ...data, infants: passenger.infants }]
+                            passengers: [...(f.passengers || []), {
+                                ...data,
+                                phoneNumber: data.phone_number,
+                                flightNumber: data.flight_number,
+                                bookingReference: data.booking_reference,
+                                infants: passenger.infants
+                            }]
                         };
                     }
                     return f;
@@ -661,18 +695,18 @@ export const FlightProvider = ({ children }) => {
         const airlineData = {
             user_id: targetUserId,
             name: airline.name,
-            ticket_template: airline.ticketTemplate || airline.ticket_template,
-            manifest_template: airline.manifestTemplate || airline.manifest_template,
-            manifest_us: airline.manifestUs || airline.manifest_us,
-            manifest_airport: airline.manifestAirport || airline.manifest_airport,
-            default_booking_reference: airline.defaultBookingReference || airline.default_booking_reference,
-            default_flight_number: airline.defaultFlightNumber || airline.default_flight_number,
+            ticket_template: airline.ticketTemplate ?? airline.ticket_template ?? "",
+            manifest_template: airline.manifestTemplate ?? airline.manifest_template ?? "",
+            manifest_us: airline.manifestUs ?? airline.manifest_us ?? "",
+            manifest_airport: airline.manifestAirport ?? airline.manifest_airport ?? "",
+            default_booking_reference: airline.defaultBookingReference ?? airline.default_booking_reference ?? "",
+            default_flight_number: airline.defaultFlightNumber ?? airline.default_flight_number ?? "",
             // Pricing Fields
-            adult_price: airline.adultPrice,
-            child_price: airline.childPrice,
-            infant_price: airline.infantPrice,
-            tax: airline.tax,
-            surcharge: airline.surcharge,
+            adult_price: airline.adultPrice ?? 0,
+            child_price: airline.childPrice ?? 0,
+            infant_price: airline.infantPrice ?? 0,
+            tax: airline.tax ?? 0,
+            surcharge: airline.surcharge ?? 0,
             updated_by: currentUser.id
         };
 
@@ -715,18 +749,18 @@ export const FlightProvider = ({ children }) => {
         if (!currentUser) return;
         const airlineData = {
             name: updatedAirline.name,
-            ticket_template: updatedAirline.ticketTemplate || updatedAirline.ticket_template,
-            manifest_template: updatedAirline.manifestTemplate || updatedAirline.manifest_template,
-            manifest_us: updatedAirline.manifestUs || updatedAirline.manifest_us,
-            manifest_airport: updatedAirline.manifestAirport || updatedAirline.manifest_airport,
-            default_booking_reference: updatedAirline.defaultBookingReference || updatedAirline.default_booking_reference,
-            default_flight_number: updatedAirline.defaultFlightNumber || updatedAirline.default_flight_number,
+            ticket_template: updatedAirline.ticketTemplate ?? updatedAirline.ticket_template ?? "",
+            manifest_template: updatedAirline.manifestTemplate ?? updatedAirline.manifest_template ?? "",
+            manifest_us: updatedAirline.manifestUs ?? updatedAirline.manifest_us ?? "",
+            manifest_airport: updatedAirline.manifestAirport ?? updatedAirline.manifest_airport ?? "",
+            default_booking_reference: updatedAirline.defaultBookingReference ?? updatedAirline.default_booking_reference ?? "",
+            default_flight_number: updatedAirline.defaultFlightNumber ?? updatedAirline.default_flight_number ?? "",
             // Pricing Fields
-            adult_price: updatedAirline.adultPrice,
-            child_price: updatedAirline.childPrice,
-            infant_price: updatedAirline.adultPrice === undefined ? undefined : updatedAirline.infantPrice,
-            tax: updatedAirline.adultPrice === undefined ? undefined : updatedAirline.tax,
-            surcharge: updatedAirline.adultPrice === undefined ? undefined : updatedAirline.surcharge,
+            adult_price: updatedAirline.adultPrice ?? 0,
+            child_price: updatedAirline.childPrice ?? 0,
+            infant_price: updatedAirline.infantPrice ?? 0,
+            tax: updatedAirline.tax ?? 0,
+            surcharge: updatedAirline.surcharge ?? 0,
             updated_by: currentUser.id
         };
 
@@ -1074,6 +1108,36 @@ export const FlightProvider = ({ children }) => {
         return user?.name || 'User';
     };
 
+    const updateAgencyBranding = async (name, tagline) => {
+        if (!currentUser || !targetUserId) return;
+
+        try {
+            const { error } = await supabase
+                .from('settings')
+                .update({
+                    agency_name: name,
+                    agency_tagline: tagline,
+                    updated_by: currentUser.id,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('user_id', targetUserId);
+
+            if (error) throw error;
+
+            setAgencyName(name);
+            setAgencyTagline(tagline);
+            toast.success('Agency branding updated successfully');
+
+            await logActivity('UPDATE', 'SETTINGS', targetUserId,
+                `Updated global agency branding: ${name} - ${tagline}`
+            );
+        } catch (err) {
+            console.error('Error updating agency branding:', err);
+            toast.error('Failed to update agency branding');
+            throw err;
+        }
+    };
+
     return (
         <FlightContext.Provider value={{
             refreshData: loadInitialData,
@@ -1082,6 +1146,9 @@ export const FlightProvider = ({ children }) => {
             agencies,
             prices,
             users,
+            agencyName,
+            agencyTagline,
+            updateAgencyBranding,
             loading,
             createFlight,
             updateFlight,

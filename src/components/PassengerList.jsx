@@ -11,7 +11,8 @@ import {
     MessageSquare,
     Trash2,
     Edit,
-    Check
+    Check,
+    Search
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -29,6 +30,10 @@ const PassengerList = ({
     const { currentUser } = useAuth();
     const [openMenuId, setOpenMenuId] = useState(null);
     const menuRef = useRef(null);
+
+    // Advanced Filtering States
+    const [filterType, setFilterType] = useState('ALL');
+    const [filterValue, setFilterValue] = useState('');
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -51,6 +56,45 @@ const PassengerList = ({
         return () => window.removeEventListener('scroll', handleScroll, true);
     }, [openMenuId]);
 
+    // Derived Data for Filters
+    const uniqueAgencies = React.useMemo(() => {
+        const agencies = passengers.map(p => p.agency || 'Us');
+        return [...new Set(agencies)].sort();
+    }, [passengers]);
+
+    const uniqueCreators = React.useMemo(() => {
+        const creators = passengers.map(p => p.created_by);
+        return [...new Set(creators)].map(id => ({ id, name: resolveUserName(id) })).sort((a, b) => a.name.localeCompare(b.name));
+    }, [passengers, resolveUserName]);
+
+    // Filtering Logic
+    const filteredPassengers = React.useMemo(() => {
+        if (filterType === 'ALL' || !filterValue) return passengers;
+
+        return passengers.filter(p => {
+            const val = filterValue.toLowerCase();
+            switch (filterType) {
+                case 'Name':
+                    return p.name?.toLowerCase().includes(val);
+                case 'Phone':
+                    return (p.phone_number || p.phoneNumber || '').includes(val);
+                case 'Occupancies':
+                    if (val === 'adults') return p.type === 'Adult';
+                    if (val === 'children') return p.type === 'Child';
+                    if (val === 'infants') return p.infants && p.infants.length > 0;
+                    if (val === 'male') return p.gender === 'M';
+                    if (val === 'female') return p.gender === 'F';
+                    return true;
+                case 'Agencies':
+                    return (p.agency || 'Us') === filterValue;
+                case 'Users':
+                    return p.created_by === filterValue;
+                default:
+                    return true;
+            }
+        });
+    }, [passengers, filterType, filterValue]);
+
     if (passengers.length === 0) {
         return (
             <div className="empty-state">
@@ -60,7 +104,7 @@ const PassengerList = ({
         );
     }
 
-    const allSelected = passengers.length > 0 && selectedIds.length === passengers.length;
+    const allSelected = filteredPassengers.length > 0 && selectedIds.length === filteredPassengers.length;
 
     const toggleMenu = (e, id) => {
         e.stopPropagation();
@@ -81,16 +125,96 @@ const PassengerList = ({
             <div className="list-header">
                 <div className="header-left-group">
                     <Users size={18} className="text-primary" />
-                    <h3>Registered Passengers ({passengers.length})</h3>
+                    <h3>Registered Passengers ({filteredPassengers.length})</h3>
                 </div>
                 <label className="select-all-label">
                     <input
                         type="checkbox"
                         checked={allSelected}
-                        onChange={onToggleSelectAll}
+                        onChange={() => onToggleSelectAll(filteredPassengers.map(p => p.id))}
                     />
-                    <span>Select All</span>
+                    <span>Select Filtered</span>
                 </label>
+            </div>
+
+            {/* Advanced Filter Bar */}
+            <div className="filter-bar shadow-sm">
+                <div className="filter-group">
+                    <Search size={18} className="text-muted" />
+                    <select
+                        className="filter-select"
+                        value={filterType}
+                        onChange={(e) => { setFilterType(e.target.value); setFilterValue(''); }}
+                    >
+                        <option value="ALL">All</option>
+                        <option value="Name">Name</option>
+                        <option value="Phone">Phone</option>
+                        <option value="Occupancies">Occupancy</option>
+                        <option value="Agencies">Agency</option>
+                        <option value="Users">Creator</option>
+                    </select>
+                </div>
+
+                {filterType !== 'ALL' && (
+                    <div className="filter-input-wrapper">
+                        {filterType === 'Name' || filterType === 'Phone' ? (
+                            <>
+                                {filterType === 'Name' ? <Users size={16} className="filter-icon" /> : <Phone size={16} className="filter-icon" />}
+                                <input
+                                    type="text"
+                                    placeholder={`Enter ${filterType.toLowerCase()}...`}
+                                    value={filterValue}
+                                    onChange={(e) => setFilterValue(e.target.value)}
+                                    autoFocus
+                                />
+                            </>
+                        ) : filterType === 'Occupancies' ? (
+                            <select
+                                value={filterValue}
+                                onChange={(e) => setFilterValue(e.target.value)}
+                                className="pl-12"
+                                autoFocus
+                            >
+                                <option value="">Select Occupancy...</option>
+                                <option value="adults">Adults</option>
+                                <option value="children">Children</option>
+                                <option value="infants">With Infants</option>
+                                <option value="male">Male Only</option>
+                                <option value="female">Female Only</option>
+                            </select>
+                        ) : filterType === 'Agencies' ? (
+                            <select
+                                value={filterValue}
+                                onChange={(e) => setFilterValue(e.target.value)}
+                                className="pl-12"
+                                autoFocus
+                            >
+                                <option value="">Select Agency...</option>
+                                {uniqueAgencies.map(a => (
+                                    <option key={a} value={a}>{a}</option>
+                                ))}
+                            </select>
+                        ) : filterType === 'Users' ? (
+                            <select
+                                value={filterValue}
+                                onChange={(e) => setFilterValue(e.target.value)}
+                                className="pl-12"
+                                autoFocus
+                            >
+                                <option value="">Select Creator...</option>
+                                {uniqueCreators.map(u => (
+                                    <option key={u.id} value={u.id}>{u.name}</option>
+                                ))}
+                            </select>
+                        ) : null}
+                    </div>
+                )}
+
+                {filteredPassengers.length < passengers.length && (
+                    <button className="btn-link text-primary" onClick={() => { setFilterType('ALL'); setFilterValue(''); }}>
+                        Clear Filters
+                    </button>
+                )}
             </div>
 
             <div className="iron-scroll-container">
@@ -103,7 +227,7 @@ const PassengerList = ({
                                         <input
                                             type="checkbox"
                                             checked={allSelected}
-                                            onChange={onToggleSelectAll}
+                                            onChange={() => onToggleSelectAll(filteredPassengers.map(p => p.id))}
                                         />
                                     </th>
                                     <th className="col-no">No.</th>
@@ -115,7 +239,7 @@ const PassengerList = ({
                                 </tr>
                             </thead>
                             <tbody>
-                                {passengers.map((p, index) => (
+                                {filteredPassengers.map((p, index) => (
                                     <tr key={p.id} className={selectedIds.includes(p.id) ? 'selected' : ''}>
                                         <td className="col-check">
                                             <input
@@ -149,7 +273,7 @@ const PassengerList = ({
                                                 {p.agency || 'Us'}
                                             </span>
                                         </td>
-                                        <td className="col-phone">{p.phoneNumber || '—'}</td>
+                                        <td className="col-phone">{p.phone_number || p.phoneNumber || '—'}</td>
                                         <td className="col-creator">
                                             <span className="creator-text">{resolveUserName(p.created_by)}</span>
                                         </td>

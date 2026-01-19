@@ -8,8 +8,10 @@ import SearchFlight from './pages/SearchFlight';
 import FlightDetails from './pages/FlightDetails';
 import Settings from './pages/Settings';
 import LoginPage from './pages/LoginPage';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import ActivityLog from './pages/ActivityLog';
-import { FlightProvider } from './context/FlightContext';
+import { FlightProvider, useFlights } from './context/FlightContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Toaster } from 'react-hot-toast';
 import Loader from './components/Loader';
@@ -29,7 +31,12 @@ const ProtectedRoute = ({ children }) => {
 // Main App Layout (with Sidebar)
 const AppLayout = ({ children }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const location = useLocation();
+  const { agencyName, agencyTagline } = useFlights();
+
+  // Update site title
+  useEffect(() => {
+    document.title = `${agencyName} - ${agencyTagline}`;
+  }, [agencyName, agencyTagline]);
 
   // Close menu when route changes
   useEffect(() => {
@@ -43,8 +50,8 @@ const AppLayout = ({ children }) => {
         <div className="logo-container">
           <PlaneTakeoff size={24} className="logo-icon" />
           <div className="logo-text-col">
-            <span className="logo-text">AREYS</span>
-            <span className="brand-tagline">Travel Agency</span>
+            <span className="logo-text">{agencyName}</span>
+            <span className="brand-tagline">{agencyTagline}</span>
           </div>
         </div>
         <button className="menu-toggle" onClick={() => setIsMenuOpen(!isMenuOpen)}>
@@ -121,6 +128,14 @@ function AppRoutes() {
       <Route
         path="/login"
         element={currentUser ? <Navigate to="/" replace /> : <LoginPage />}
+      />
+      <Route
+        path="/forgot-password"
+        element={currentUser ? <Navigate to="/" replace /> : <ForgotPassword />}
+      />
+      <Route
+        path="/reset-password"
+        element={<ResetPassword />}
       />
 
       {/* Protected Routes */}
